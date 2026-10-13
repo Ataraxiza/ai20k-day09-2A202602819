@@ -7,7 +7,7 @@
 | Họ và tên | `Nguyễn Tuấn Khanh` |
 | MSSV (đúng bằng `LAB_STUDENT_ID` trong `.env`) | `2A202602819` |
 | GitHub | `Ataraxiza` |
-| Trip dùng cho bài tập sập và chạy lại (xem GUIDE, bước 5) | <điền: trip-xxxxx> |
+| Trip dùng cho bài tập sập và chạy lại (xem GUIDE, bước 5) | `trip-00722` |
 
 ## Kết quả cuối
 
@@ -139,13 +139,24 @@ Vì sao `dataset_version` là **băm nội dung** chứ không phải ngày gi�
 ### Câu 9
 Mô tả chính xác điều xảy ra khi trip của bạn sập rồi chạy lại: bao nhiêu task chuyển đỏ, bao nhiêu task `upstream_failed`, bạn clear gì, dữ liệu có nhân đôi không, `dataset_version` có đổi không? Bằng chứng (ảnh, số) là gì?
 
+# Trả lời
+Phần chạy DAG và gây lỗi chưa thực hiện được trong lượt này: sau khi bật profile Metabase, Docker Desktop báo không thể khởi động và cổng Airflow không phản hồi. Theo DAG, `trip-00722` được chọn vì phần số của MSSV `2A202602819` modulo 26 cho chỉ số 1 trong danh sách trip. Khi hoàn tất bài tập, dự kiến đúng một mapped task `silver_frames` đỏ; task lỗi chặn bảy task phía sau, còn 25 mapped task trip khác chạy xong. Chỉ clear task đỏ sẽ chạy lại partition đó và cho chuỗi downstream tiếp tục; overwrite theo partition tránh nhân đôi và version cần giữ `cc1d1c40056a`. Đây là kết quả cần xác nhận trong Airflow trước khi nộp; hiện chưa có ảnh/log chứng minh nên chưa được xem là đã hoàn thành.
+
 ### Câu 10
 Nâng từ 2 drive lên **500 xe mỗi ngày**: ba thành phần nào của pipeline này sẽ vỡ đầu tiên, và bạn thay bằng gì (nối với slide 12, 22, 23)?
 
+# Trả lời
+Ở quy mô 500 xe/ngày, ba nút nghẽn dễ gặp trước tiên là: (1) decode video bằng FFmpeg tốn CPU, I/O và dung lượng; chuyển sang worker xử lý song song theo trip, object storage và định dạng/codec phù hợp. (2) Airflow `LocalExecutor` trên một host, hiện giới hạn song song thấp và task frame tuần tự; dùng executor phân tán như Celery/Kubernetes và chia task theo partition để mở rộng worker. (3) DuckDB cục bộ/MinIO và Postgres warehouse tập trung có thể nghẽn ở ghi, số lượng object nhỏ và truy vấn đồng thời; tăng throughput object storage/Parquet-Delta, tối ưu partition/batch và đưa marts sang warehouse phân tán được quản lý. Nên đo CPU, bytes/s và hàng đợi trước khi chọn cách scale.
+
 ## Câu hỏi riêng của bạn trên Metabase
 
-Câu SQL bạn thêm vào dashboard và điều nó cho biết:
+Câu SQL bạn thêm vào dashboard và điều nó cho biết
+# Trả lời
+SQL câu hỏi riêng (tỷ lệ khung bị loại theo drive): `select drive_id, frames_total, frames_kept, frames_total - frames_kept as dropped_frames, round(100.0 * (frames_total - frames_kept) / nullif(frames_total, 0), 2) as dropped_pct from marts.mart_frame_funnel order by drive_id;`. Từ kết quả pipeline, A giữ 436/602 khung (166 bị loại, 27.57%); B giữ 583/644 (61 bị loại, 9.47%). Query dùng `frames_kept` để tránh cộng các cờ loại có thể chồng lấp. Cần lưu câu hỏi này trong dashboard Metabase trước khi chụp ảnh.
 
 ## Nhìn lại
 
 Điều bạn thấy bất ngờ nhất, điều gì còn chưa rõ, và một lỗi dữ liệu mà bạn nghĩ pipeline **chưa** bắt được (nếu có). Tối đa 8 dòng.
+
+# Trả lời
+Điểm dễ kiểm chứng nhất trong kết quả là tăng ngưỡng dHash từ 0 lên 2 làm số khung gần trùng tăng từ 61 lên 149 ở drive A và từ 8 lên 53 ở B; điều đó cho thấy ngưỡng tác động mạnh tới dữ liệu giữ lại. B cũng có 61 khung tối được giữ, khác hẳn 4 khung đen bị loại. Tôi chưa xác nhận hành vi retry của task trong Airflow vì Docker Desktop ngừng phản hồi; cần chạy phần đó và lưu ảnh trước khi coi bài là hoàn tất. Một lỗi chưa được chứng minh pipeline bắt: sai tọa độ GPS nhưng vẫn đúng kiểu và nằm trong miền giá trị hợp lệ.
