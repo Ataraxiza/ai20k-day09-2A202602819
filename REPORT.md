@@ -99,6 +99,7 @@ Delta overwrite theo partition an toàn hơn vì chỉ ghi đè dữ liệu củ
 ### Câu 5
 Khung hình **đen** và khung hình **tối** khác nhau thế nào, pipeline xử lý khác nhau ra sao, bạn có đồng ý không? Dựa vào `threshold.json`: nếu chọn ngưỡng 0, 2, 6 thì bao nhiêu khung bị coi là trùng ở mỗi drive? Bạn chọn ngưỡng nào, vì sao, và ngưỡng đó phụ thuộc vào tốc độ xe thế nào?
 
+# Trả lời
 So sánh khung hình đen và khung hình tối:
 - Khung đen: gần như không có thông tin hình ảnh, có thể do lỗi camera hoặc mất tín hiệu.
 - Khung tối: vẫn có chi tiết nhưng thiếu sáng, ví dụ khi đi qua đường hầm hoặc bóng râm.
@@ -118,11 +119,20 @@ Ngưỡng còn phụ thuộc vào tốc độ xe: xe chạy chậm hoặc camera
 ### Câu 6
 Dựa vào `leakage.json`: chia theo khung hình làm bao nhiêu trip bị chia cắt, so với chia theo trip? Vì sao điều này làm điểm kiểm thử đẹp một cách giả tạo?
 
+# Trả lời
+Trong 1019 khung dùng được thuộc 26 trip, cách chia ngẫu nhiên theo khung hình làm cả 26 trip xuất hiện ở nhiều split, và cả 26 có khung ở cả train lẫn test. Chia theo trip của pipeline làm 0 trip bị chia cắt. Các khung liên tiếp trong cùng cảnh rất giống nhau; nếu cảnh đã vào train cũng lọt vào test, mô hình có thể nhận ra cùng cảnh thay vì tổng quát hoá, khiến điểm test cao giả tạo.
+
 ### Câu 7
 Vì sao `dataset_version` là **băm nội dung** chứ không phải ngày giờ hay số đếm? Hai lần chạy liên tiếp cho kết quả gì? Vì sao `dataset_version` của bạn **khác** bạn bè dù cùng dữ liệu (liên hệ MSSV)?
 
+# Trả lời
+`dataset_version` là 12 ký tự đầu của SHA-256 trên nội dung có thứ tự `frame_id|split`, nên định danh nội dung dataset thay vì thời điểm chạy hay số đếm dễ trùng. Bước 4 và lần chạy `step all --reset` đều tạo `cc1d1c40056a`, phù hợp với tính tái lập khi dữ liệu/luật không đổi. MSSV được dùng làm salt khi phân trip vào split; MSSV khác có thể đổi cặp frame/split, vì vậy hash và version cũng đổi dù đầu vào gốc giống nhau.
+
 ### Câu 8
 Đọc phần `lineage` trong `manifest.json` của dataset bạn. Trả lời "dataset này được tạo từ dữ liệu nào?" bằng chính nội dung đó. Nếu một người hỏi 3 tháng sau, thông tin nào giúp tái tạo lại đúng dataset này?
+
+# Trả lời
+`manifest.json` ghi dataset `cc1d1c40056a`, 1019 ảnh, các luật loại `is_black`, `is_blurry`, `is_near_dup`, `not sync_ok`, và chia per-trip, phân tầng theo drive, thứ tự MD5. Lineage là các phiên bản Delta: `bronze.raw_telemetry_a=0`, `bronze.raw_telemetry_b=0`, `bronze.trips_raw=0`, `bronze.video_files=1`, `silver.frames=25`, `silver.telemetry=0`, `silver.frames_flagged=0`, `silver.frame_telemetry=0`. SHA-256 video đầu vào: drive A `636ba1a98dfc5ba665d1c935e1d2064e69f4df360ff9ffbd15795957d5e7e9aa`; drive B `bfa62703f645ff77a8578ae3fc74a00881140d38a404d43c8e2af265bbee9fdc`. Các version, hash, luật và manifest hash (`528c68d2dcd3f3763b511f56da775b3c3b0831e7594a60c94398146a1da1a23c`) giúp xác định lại đúng đầu vào và quy tắc tạo dataset.
 
 ## Bước 5 · Điều phối và phục vụ
 
