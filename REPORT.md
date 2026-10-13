@@ -89,14 +89,34 @@ Vai trò của cổng chất lượng: Cổng chất lượng giúp phát hiện
 ### Câu 4
 Dựa vào `idempotency.json`: số dòng trước và sau hai lần chạy lại, và khi ghi kiểu `append`. Vì sao Delta `overwrite` theo partition (một trip) an toàn hơn xoá rồi ghi lại, nhất là khi giữa chừng có lỗi?
 
+# Trả lời
+- Trước khi chạy lại: 1246 dòng.
+- Sau hai lần chạy lại: 1246 dòng, fingerprint không đổi (6c7480dfde7e).
+- Khi dùng append: 60 khung hình bị ghi thành 120 dòng, dữ liệu bị nhân đôi.
+Delta overwrite theo partition an toàn hơn vì chỉ ghi đè dữ liệu của trip cần xử lý, tránh trùng lặp khi chạy lại. Cơ chế giao dịch ACID giúp bảo đảm tính nhất quán: nếu ghi thất bại giữa chừng, dữ liệu cũ vẫn được bảo vệ thay vì để lại trạng thái xóa rồi chưa ghi xong.
+
+
 ### Câu 5
 Khung hình **đen** và khung hình **tối** khác nhau thế nào, pipeline xử lý khác nhau ra sao, bạn có đồng ý không? Dựa vào `threshold.json`: nếu chọn ngưỡng 0, 2, 6 thì bao nhiêu khung bị coi là trùng ở mỗi drive? Bạn chọn ngưỡng nào, vì sao, và ngưỡng đó phụ thuộc vào tốc độ xe thế nào?
+
+So sánh khung hình đen và khung hình tối:
+- Khung đen: gần như không có thông tin hình ảnh, có thể do lỗi camera hoặc mất tín hiệu.
+- Khung tối: vẫn có chi tiết nhưng thiếu sáng, ví dụ khi đi qua đường hầm hoặc bóng râm.
+Pipeline phát hiện, đánh dấu khung đen; khung tối được gắn cờ nhưng vẫn giữ lại để không mất thông tin hữu ích. Tôi đồng ý với cách xử lý này.
+
+- Số khung bị coi là trùng theo ngưỡng dHash:
+Ngưỡng	Drive A	Drive B
+0 bit	61	8
+2 bit	149	53
+6 bit	363	244
+
+- Lựa chọn ngưỡng: chọn ngưỡng 2 bit vì cân bằng giữa phát hiện khung gần trùng và tránh loại nhầm khung có thông tin khác biệt. Ngưỡng 0 quá nghiêm ngặt, còn ngưỡng 6 có thể loại bỏ nhiều khung hình khác nhau.
+Ngưỡng còn phụ thuộc vào tốc độ xe: xe chạy chậm hoặc camera đứng hình tạo ra nhiều khung gần giống nhau; xe chạy nhanh khiến cảnh vật thay đổi nhiều hơn. Vì vậy, cần chọn ngưỡng phù hợp để tránh loại bỏ khung hình chứa thông tin mới.
 
 ## Bước 4 · Gold
 
 ### Câu 6
 Dựa vào `leakage.json`: chia theo khung hình làm bao nhiêu trip bị chia cắt, so với chia theo trip? Vì sao điều này làm điểm kiểm thử đẹp một cách giả tạo?
-
 
 ### Câu 7
 Vì sao `dataset_version` là **băm nội dung** chứ không phải ngày giờ hay số đếm? Hai lần chạy liên tiếp cho kết quả gì? Vì sao `dataset_version` của bạn **khác** bạn bè dù cùng dữ liệu (liên hệ MSSV)?
